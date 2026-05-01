@@ -3,7 +3,6 @@ from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 import os
 
@@ -54,15 +53,14 @@ def get_conversational_chain():
     Answer:
     """
     model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
-    
-    # Modern LCEL Prompt Template
     prompt = ChatPromptTemplate.from_template(prompt_template)
     
-    # Modern Document Chain
-    chain = create_stuff_documents_chain(llm=model, prompt=prompt)
+    # PURE LCEL: We pipe the prompt directly into the model. No legacy chains needed!
+    chain = prompt | model
     return chain
 
 def user_input(user_question):
+    # FAISS safety check
     if not os.path.exists("faiss_index"):
         st.error("Vector DB not found. Please upload and process a document first.")
         return
@@ -73,12 +71,16 @@ def user_input(user_question):
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     docs = new_db.similarity_search(user_question)
     
+    # Manually extract the text from the retrieved Document objects
+    context_text = "\n\n".join([doc.page_content for doc in docs])
+    
     chain = get_conversational_chain()
     
-    # Modern LCEL invocation
-    response = chain.invoke({"context": docs, "input": user_question})
+    # Invoke the pure LCEL chain
+    response = chain.invoke({"context": context_text, "input": user_question})
     
-    st.write("**Reply:** ", response["answer"])
+    # Pure LCEL returns an AIMessage object, so we print the .content property
+    st.write("**Reply:** ", response.content) 
 
 # --- Main App Logic ---
 if st.sidebar.button("Process Documents"):
