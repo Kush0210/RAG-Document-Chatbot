@@ -54,7 +54,7 @@ def get_conversational_chain():
     Question: \n{input}\n
     Answer:
     """
-    model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
+    model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
     prompt = ChatPromptTemplate.from_template(prompt_template)
     
     # Pure LCEL
