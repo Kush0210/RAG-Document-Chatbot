@@ -1,12 +1,13 @@
 import streamlit as st
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 import os
 
-# --- Securely Load API Key ---
+# --- Securely Load API Key (Only needed for the LLM now!) ---
 api_key = st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
 if not api_key:
     st.error("Missing GOOGLE_API_KEY. Please set it in Streamlit Secrets or environment variables.")
@@ -40,7 +41,8 @@ def get_text_chunks(text):
     return chunks
 
 def get_vector_store(text_chunks):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    # LOCAL EMBEDDINGS: This runs entirely on the CPU. No API calls!
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
     vector_store.save_local("faiss_index")
 
@@ -55,7 +57,7 @@ def get_conversational_chain():
     model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
     prompt = ChatPromptTemplate.from_template(prompt_template)
     
-    # PURE LCEL: We pipe the prompt directly into the model. No legacy chains needed!
+    # Pure LCEL
     chain = prompt | model
     return chain
 
@@ -65,7 +67,8 @@ def user_input(user_question):
         st.error("Vector DB not found. Please upload and process a document first.")
         return
 
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    # LOCAL EMBEDDINGS: Must match the model used to create the DB
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     
     # Load the local FAISS index
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
@@ -79,7 +82,6 @@ def user_input(user_question):
     # Invoke the pure LCEL chain
     response = chain.invoke({"context": context_text, "input": user_question})
     
-    # Pure LCEL returns an AIMessage object, so we print the .content property
     st.write("**Reply:** ", response.content) 
 
 # --- Main App Logic ---
