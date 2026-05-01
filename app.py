@@ -20,7 +20,7 @@ backup_model = st.secrets.get("GROQ_BACKUP_MODEL", "llama-3.1-8b-instant")
 # --- Page Config ---
 st.set_page_config(page_title="RAG Chatbot", page_icon="🤖", layout="wide")
 st.title("🤖 Chat with your Documents (RAG)")
-st.write(f"Powered by Local CPU Embeddings & **Groq** (Primary: `{primary_model}` | Backup: `{backup_model}`)")
+st.write("Welcome! Upload your PDFs to securely analyze and chat with your documents in real-time.")
 
 # --- Sidebar for Upload ---
 with st.sidebar:
