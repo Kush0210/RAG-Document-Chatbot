@@ -1,26 +1,28 @@
 import streamlit as st
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-import google.generativeai as genai
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 import os
+
+# --- Securely Load API Key ---
+# This pulls the GOOGLE_API_KEY from Streamlit Community Cloud Secrets
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+    os.environ["GOOGLE_API_KEY"] = api_key # Sets it for LangChain to find automatically
+except KeyError:
+    st.error("Missing GOOGLE_API_KEY. Please set it in Streamlit Advanced Settings > Secrets.")
+    st.stop()
 
 # --- Page Config ---
 st.set_page_config(page_title="RAG Chatbot", page_icon="🤖", layout="wide")
 st.title("🤖 Chat with your Documents (RAG)")
 st.write("Upload a PDF, let the AI process it, and ask questions! Perfect for long reports, manuals, or research papers.")
 
-# --- Sidebar for API Key & Upload ---
+# --- Sidebar for Upload ---
 with st.sidebar:
-    st.header("Setup")
-    api_key = st.text_input("Enter your Google Gemini API Key:", type="password")
-    st.markdown("[Get your free API key here](https://aistudio.google.com/app/apikey)")
-    
-    st.divider()
     st.header("Document Upload")
     pdf_docs = st.file_uploader("Upload your PDF Files", accept_multiple_files=True, type=["pdf"])
 
@@ -38,8 +40,9 @@ def get_text_chunks(text):
     chunks = text_splitter.split_text(text)
     return chunks
 
-def get_vector_store(text_chunks, api_key):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=api_key)
+def get_vector_store(text_chunks):
+    # API key is automatically picked up from os.environ
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
     vector_store.save_local("faiss_index")
 
@@ -51,13 +54,13 @@ def get_conversational_chain():
     Question: \n{question}\n
     Answer:
     """
-    model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3, google_api_key=api_key)
+    model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
     return chain
 
-def user_input(user_question, api_key):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=api_key)
+def user_input(user_question):
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     
     # Load the local FAISS index
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
@@ -69,19 +72,20 @@ def user_input(user_question, api_key):
     st.write("**Reply:** ", response["output_text"])
 
 # --- Main App Logic ---
-if not api_key:
-    st.warning("Please enter your API Key in the sidebar to proceed.")
-else:
-    if st.sidebar.button("Process Documents"):
-        if pdf_docs:
-            with st.spinner("Processing..."):
-                raw_text = get_pdf_text(pdf_docs)
-                text_chunks = get_text_chunks(raw_text)
-                get_vector_store(text_chunks, api_key)
-                st.sidebar.success("Done! You can now ask questions.")
-        else:
-            st.sidebar.error("Please upload a PDF first.")
+if st.sidebar.button("Process Documents"):
+    if pdf_docs:
+        with st.spinner("Processing..."):
+            raw_text = get_pdf_text(pdf_docs)
+            text_chunks = get_text_chunks(raw_text)
+            get_vector_store(text_chunks)
+            st.sidebar.success("Done! You can now ask questions.")
+    else:
+        st.sidebar.error("Please upload a PDF first.")
 
-    user_question = st.text_input("Ask a question about your uploaded documents:")
-    if user_question:
-        user_input(user_question, api_key)
+user_question = st.text_input("Ask a question about your uploaded documents:")
+if user_question:
+    # Check if the vector database exists before trying to search it
+    if os.path.exists("faiss_index"):
+        user_input(user_question)
+    else:
+        st.warning("Please upload and process a PDF document first.")
