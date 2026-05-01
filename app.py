@@ -1,20 +1,18 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
-from langchain.chains.question_answering import load_qa_chain
-from langchain.prompts import PromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
 import os
 
 # --- Securely Load API Key ---
-# This pulls the GOOGLE_API_KEY from Streamlit Community Cloud Secrets
-try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    os.environ["GOOGLE_API_KEY"] = api_key # Sets it for LangChain to find automatically
-except KeyError:
-    st.error("Missing GOOGLE_API_KEY. Please set it in Streamlit Advanced Settings > Secrets.")
+api_key = st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if not api_key:
+    st.error("Missing GOOGLE_API_KEY. Please set it in Streamlit Secrets or environment variables.")
     st.stop()
+os.environ["GOOGLE_API_KEY"] = api_key
 
 # --- Page Config ---
 st.set_page_config(page_title="RAG Chatbot", page_icon="🤖", layout="wide")
@@ -32,16 +30,17 @@ def get_pdf_text(pdf_docs):
     for pdf in pdf_docs:
         pdf_reader = PdfReader(pdf)
         for page in pdf_reader.pages:
-            text += page.extract_text()
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text
     return text
 
 def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_text(text)
     return chunks
 
 def get_vector_store(text_chunks):
-    # API key is automatically picked up from os.environ
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
     vector_store.save_local("faiss_index")
@@ -51,15 +50,23 @@ def get_conversational_chain():
     Answer the question as detailed as possible from the provided context. If the answer is not in
     the provided context, just say, "The answer is not available in the context." Do not provide a wrong answer.\n\n
     Context:\n {context}?\n
-    Question: \n{question}\n
+    Question: \n{input}\n
     Answer:
     """
     model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
-    prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
-    chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
+    
+    # Modern LCEL Prompt Template
+    prompt = ChatPromptTemplate.from_template(prompt_template)
+    
+    # Modern Document Chain
+    chain = create_stuff_documents_chain(llm=model, prompt=prompt)
     return chain
 
 def user_input(user_question):
+    if not os.path.exists("faiss_index"):
+        st.error("Vector DB not found. Please upload and process a document first.")
+        return
+
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     
     # Load the local FAISS index
@@ -67,25 +74,28 @@ def user_input(user_question):
     docs = new_db.similarity_search(user_question)
     
     chain = get_conversational_chain()
-    response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
     
-    st.write("**Reply:** ", response["output_text"])
+    # Modern LCEL invocation
+    response = chain.invoke({"context": docs, "input": user_question})
+    
+    st.write("**Reply:** ", response["answer"])
 
 # --- Main App Logic ---
 if st.sidebar.button("Process Documents"):
     if pdf_docs:
         with st.spinner("Processing..."):
             raw_text = get_pdf_text(pdf_docs)
-            text_chunks = get_text_chunks(raw_text)
-            get_vector_store(text_chunks)
-            st.sidebar.success("Done! You can now ask questions.")
+            
+            # Check for empty/corrupt PDFs
+            if not raw_text.strip():
+                st.sidebar.error("No readable text found in the PDF. It might be an image or corrupt.")
+            else:
+                text_chunks = get_text_chunks(raw_text)
+                get_vector_store(text_chunks)
+                st.sidebar.success("Done! You can now ask questions.")
     else:
         st.sidebar.error("Please upload a PDF first.")
 
 user_question = st.text_input("Ask a question about your uploaded documents:")
 if user_question:
-    # Check if the vector database exists before trying to search it
-    if os.path.exists("faiss_index"):
-        user_input(user_question)
-    else:
-        st.warning("Please upload and process a PDF document first.")
+    user_input(user_question)
