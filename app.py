@@ -7,6 +7,10 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 import os
 
+hf_token = st.secrets.get("HF_TOKEN") or os.getenv("HF_TOKEN")
+if hf_token:
+    os.environ["HF_TOKEN"] = hf_token
+
 # --- Securely Load API Key (Only needed for the LLM now!) ---
 api_key = st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
 if not api_key:
