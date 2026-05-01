@@ -5,7 +5,7 @@
 [![Groq](https://img.shields.io/badge/Groq-LPU_Inference-orange.svg)](https://groq.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Live Demo:** [Insert your Streamlit Cloud URL here]
+**Live Demo:** [[https://rag-document-chatbot-dnent3vrb5bwnzsd7zpovz.streamlit.app/]]
 
 A high-performance, fault-tolerant Retrieval-Augmented Generation (RAG) system designed to securely ingest, vectorize, and query PDF documents. This project demonstrates modern AI engineering principles, specifically focusing on data privacy, low-latency inference, and system reliability.
 
