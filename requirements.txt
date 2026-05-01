@@ -8,3 +8,4 @@ langchain-huggingface
 sentence-transformers
 PyPDF2
 faiss-cpu
+torchvision
