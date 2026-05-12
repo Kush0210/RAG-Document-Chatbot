@@ -1,10 +1,35 @@
 name: Keep App Awake
 on:
   schedule:
-    - cron: "0 */2 * * *" # Runs every 6 hours
+    - cron: "0 */6 * * *" # Runs every 6 hours
+  workflow_dispatch: # Allows you to run it manually from the Actions tab
+
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Streamlit App
-        run: curl -I https://rag-document-chatbot-dnent3vrb5bwnzsd7zpovz.streamlit.app/
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install Puppeteer
+        run: npm install puppeteer
+
+      - name: Ping App with Headless Browser
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const puppeteer = require('puppeteer');
+            const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+            const page = await browser.newPage();
+            console.log('Navigating to Streamlit app...');
+            
+            // Go to the URL and wait for the network to be idle (meaning JS loaded)
+            await page.goto('https://rag-document-chatbot-dnent3vrb5bwnzsd7zpovz.streamlit.app/', {
+              waitUntil: 'networkidle2',
+              timeout: 30000
+            });
+            
+            console.log('App successfully loaded and awake!');
+            await browser.close();
