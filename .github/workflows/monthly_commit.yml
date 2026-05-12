@@ -1,0 +1,26 @@
+name: Monthly Keep-Alive Commit
+on:
+  schedule:
+    - cron: "0 0 1 * *" # Runs at 00:00 on the 1st of every month
+  workflow_dispatch: # Allows you to run it manually
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    # Crucial: This permission allows the GitHub Actions bot to push to your repo
+    permissions:
+      contents: write 
+      
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure Git Bot
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and Push Empty Commit
+        run: |
+          git commit --allow-empty -m "chore: monthly keep-alive commit to prevent cron suspension"
+          git push
