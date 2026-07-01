@@ -26,3 +26,12 @@ A high-performance, fault-tolerant Retrieval-Augmented Generation (RAG) system d
 | **Fallback LLM** | Groq (`Llama-3.1-8B`) | High-availability secondary inference model. |
 | **Embeddings** | HuggingFace CPU | `all-MiniLM-L6-v2` running entirely locally. |
 | **Vector Database** | FAISS | In-memory similarity search and dense vector clustering. |
+
+## 🧠 How It Works
+**1. Document Ingestion:** PyPDF2 parses the uploaded PDFs into raw text.
+
+**2. Chunking:** LangChain's RecursiveCharacterTextSplitter divides the text into 1,000-character chunks with a 200-character overlap to preserve semantic context between paragraphs.
+
+**3. Vectorization:** The Hugging Face CPU model converts the text chunks into dense mathematical vectors and stores them in a local FAISS index.
+
+**4. Retrieval & Generation:** When a user asks a question, the query is vectorized, and the top most relevant document chunks are retrieved from FAISS. These chunks are injected into a LangChain Prompt Template and sent to the Groq LLM to generate a contextually accurate, hallucination-free response.
