@@ -6,6 +6,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 import os
+import shutil
 
 # --- Securely Load API Key & Model Settings ---
 groq_api_key = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
@@ -20,12 +21,22 @@ backup_model = st.secrets.get("GROQ_BACKUP_MODEL", "llama-3.1-8b-instant")
 # --- Page Config ---
 st.set_page_config(page_title="RAG Chatbot", page_icon="🤖", layout="wide")
 st.title("🤖 Chat with your Documents (RAG)")
-st.write("Welcome! Upload your PDFs to securely analyze and chat with your documents in real-time.")
+st.write("An enterprise-grade Retrieval-Augmented Generation (RAG) system. Securely query, summarize, and extract insights from your documents using local vector search and high-speed AI inference.")
 
 # --- Sidebar for Upload ---
 with st.sidebar:
     st.header("Document Upload")
     pdf_docs = st.file_uploader("Upload your PDF Files", accept_multiple_files=True, type=["pdf"])
+    
+    st.divider()
+    st.header("Database Management")
+    # NEW: Added a way to clear the database so it doesn't get infinitely large
+    if st.button("Clear Database 🗑️"):
+        if os.path.exists("faiss_index"):
+            shutil.rmtree("faiss_index")
+            st.success("Vector database successfully wiped!")
+        else:
+            st.info("Database is already empty.")
 
 # --- Helper Functions ---
 def get_pdf_text(pdf_docs):
@@ -35,7 +46,10 @@ def get_pdf_text(pdf_docs):
         for page in pdf_reader.pages:
             page_text = page.extract_text()
             if page_text:
-                text += page_text
+                # FIXED: Added a space to prevent words from sticking together across pages
+                text += page_text + "\n" 
+        # FIXED: Added a distinct separator between multiple PDFs so the AI doesn't mix them up
+        text += "\n\n--- NEW DOCUMENT ---\n\n"
     return text
 
 def get_text_chunks(text):
@@ -43,9 +57,17 @@ def get_text_chunks(text):
     return text_splitter.split_text(text)
 
 def get_vector_store(text_chunks):
-    # LOCAL CPU EMBEDDINGS
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
+    
+    # FIXED: The Incremental Storage Logic
+    if os.path.exists("faiss_index"):
+        # If DB exists, load it and APPEND the new documents
+        vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+        vector_store.add_texts(text_chunks)
+    else:
+        # If DB does not exist, CREATE a new one
+        vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
+        
     vector_store.save_local("faiss_index")
 
 def get_conversational_chain():
@@ -57,26 +79,21 @@ def get_conversational_chain():
     Answer:
     """
     
-    # 1. Define the Primary LLM (70B Model - Smartest)
     primary_llm = ChatGroq(
         groq_api_key=groq_api_key, 
         model_name=primary_model, 
         temperature=0.3
     )
     
-    # 2. Define the Backup LLM (8B Model - Highest Rate Limits)
     backup_llm = ChatGroq(
         groq_api_key=groq_api_key, 
         model_name=backup_model, 
         temperature=0.3
     )
     
-    # 3. LangChain Magic: Bind them together. If primary fails, it instantly uses backup.
     llm_with_fallback = primary_llm.with_fallbacks([backup_llm])
-    
     prompt = ChatPromptTemplate.from_template(prompt_template)
     
-    # Pure LCEL utilizing the fallback LLM configuration
     chain = prompt | llm_with_fallback
     return chain
 
@@ -86,10 +103,8 @@ def user_input(user_question):
         return
 
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     
-    # k=3 to keep chunk sizes manageable
     docs = new_db.similarity_search(user_question, k=3) 
     context_text = "\n\n".join([doc.page_content for doc in docs])
     
@@ -100,7 +115,6 @@ def user_input(user_question):
             response = chain.invoke({"context": context_text, "input": user_question})
             st.write("**Reply:** ", response.content) 
         except Exception as e:
-            # This only triggers if BOTH the primary and the backup models fail
             st.error(f"Both primary and backup models failed. Error: {str(e)}")
 
 # --- Main App Logic ---
@@ -114,7 +128,7 @@ if st.sidebar.button("Process Documents"):
             else:
                 text_chunks = get_text_chunks(raw_text)
                 get_vector_store(text_chunks)
-                st.sidebar.success("Done! You can now ask questions.")
+                st.sidebar.success("Done! You can now ask questions about all uploaded files.")
     else:
         st.sidebar.error("Please upload a PDF first.")
 
