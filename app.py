@@ -20,7 +20,7 @@ backup_model = st.secrets.get("GROQ_BACKUP_MODEL", "llama-3.1-8b-instant")
 
 # --- Page Config ---
 st.set_page_config(page_title="RAG Chatbot", page_icon="🤖", layout="wide")
-st.title("🤖 Chat with your Documents (RAG)")
+st.title("Chat with your Documents (RAG)")
 st.write("An enterprise-grade Retrieval-Augmented Generation (RAG) system. Securely query, summarize, and extract insights from your documents using local vector search and high-speed AI inference.")
 
 # --- Sidebar for Upload ---
