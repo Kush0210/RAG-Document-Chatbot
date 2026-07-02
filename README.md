@@ -12,7 +12,7 @@ A high-performance, fault-tolerant Retrieval-Augmented Generation (RAG) system d
 ## 🚀 Architectural Highlights
 
 *   **Zero-Cost, Privacy-First Embeddings:** Replaced traditional cloud embedding APIs with local Hugging Face CPU models (`all-MiniLM-L6-v2`). This ensures document text is vectorized locally, drastically reducing cloud latency and keeping document data secure prior to the LLM inference stage.
-*   **High-Speed Inference:** Utilizes **Groq's LPU architecture** to run Meta's `openai/gpt-oss-120b`, delivering near-instant conversational responses.
+*   **High-Speed Inference:** Utilizes **Groq's LPU architecture** to run Open AI's `gpt-oss-120b`, delivering near-instant conversational responses.
 *   **Automated Fault Tolerance:** Implemented LangChain's `.with_fallbacks()` mechanism. If the primary 120B model hits rate limits (HTTP 429) or experiences downtime, the system automatically and silently routes the prompt to a secondary, high-availability 8B model, ensuring zero downtime for the end user.
 *   **Optimized Vector Search:** Leverages FAISS (Facebook AI Similarity Search) with optimized `k` retrieval constraints to protect LLM Token-Per-Minute (TPM) limits while maintaining highly relevant context windows.
 
