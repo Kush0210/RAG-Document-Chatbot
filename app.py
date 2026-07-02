@@ -15,7 +15,7 @@ if not groq_api_key:
     st.stop()
 
 # Load Primary and Backup models from secrets (with safe defaults)
-primary_model = st.secrets.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+primary_model = st.secrets.get("GROQ_MODEL", "openai/gpt-oss-120b")
 backup_model = st.secrets.get("GROQ_BACKUP_MODEL", "llama-3.1-8b-instant")
 
 # --- Page Config ---
